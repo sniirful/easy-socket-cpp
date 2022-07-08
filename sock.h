@@ -56,17 +56,31 @@ class socket_entry {
         return true;
     }
 
+   protected:
+    bool strict_error_checking;
+
    public:
+    socket_entry(bool sec = false) { this->strict_error_checking = sec; }
+
     std::string read_text(struct sock_data data, int buf_size) {
         std::string res = "";
         char* buffer = new char[buf_size];
+        int read_bytes;
 #ifdef __linux__
-        read(data.sock, buffer, buf_size);
+        read_bytes = read(data.sock, buffer, buf_size);
 #endif
 #ifdef _WIN32
-        recv(data.ConnectionSocket, buffer, buf_size, 0);
+        read_bytes = recv(data.ConnectionSocket, buffer, buf_size, 0);
 #endif
-        for (int i = 0; i < buf_size; i++) {
+        if (read_bytes < 0 && strict_error_checking) {
+#ifdef __linux__
+            throw errno;
+#endif
+#ifdef _WIN32
+            throw WSAGetLastError();
+#endif
+        }
+        for (int i = 0; i < read_bytes; i++) {
             res += buffer[i];
         }
         return res;
@@ -75,7 +89,7 @@ class socket_entry {
                            bool include = false) {
         std::string res = "";
         for (;;) {
-            std::string new_char = read_text(data, 1);
+            std::string new_char = this->read_text(data, 1);
             if (new_char[0] == c) {
                 if (include) res += new_char;
                 break;
@@ -89,8 +103,8 @@ class socket_entry {
         char last_c = s[s.length() - 1];
         std::string res = "";
         for (;;) {
-            std::string temp = read_until(data, last_c, true);
-            if (endsWith(temp, s)) {
+            std::string temp = this->read_until(data, last_c, true);
+            if (this->endsWith(temp, s)) {
                 int len = temp.length();
                 if (!include) len -= s.length();
                 res += temp.substr(0, len);
@@ -101,19 +115,29 @@ class socket_entry {
         return res;
     }
     std::string read_line(struct sock_data data) {
-        return read_until(data, '\n');
+        return this->read_until(data, '\n');
     }
 
     void write_text(struct sock_data data, std::string text) {
+        int written_bytes;
 #ifdef __linux
-        send(data.sock, text.c_str(), text.length(), 0);
+        written_bytes = send(data.sock, text.c_str(), text.length(), 0);
 #endif
 #ifdef _WIN32
-        send(data.ConnectionSocket, text.c_str(), text.length(), 0);
+        written_bytes =
+            send(data.ConnectionSocket, text.c_str(), text.length(), 0);
 #endif
+        if (written_bytes < 0 && strict_error_checking) {
+#ifdef __linux__
+            throw errno;
+#endif
+#ifdef _WIN32
+            throw WSAGetLastError();
+#endif
+        }
     }
     void write_line(struct sock_data data, std::string line) {
-        write_text(data, line += '\n');
+        this->write_text(data, line += '\n');
     }
 
     void close_socket(struct sock_data data) {
@@ -144,6 +168,8 @@ class server : public socket_entry {
 #endif
 
    public:
+    server(bool sec = false) { strict_error_checking = sec; }
+
     int initialize(std::string port) {
 #ifdef __linux__
         if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
@@ -232,7 +258,7 @@ class server : public socket_entry {
 #endif
             }));
         }
-        close_socket();
+        this->close_socket();
         for (std::thread& t : threads) t.join();
     }
 
@@ -284,7 +310,6 @@ class client : public socket_entry {
 #ifdef _WIN32
         iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
         if (iResult != 0) {
-            close_socket();
             return ERROR_SOCKET_CREATION;
         }
 
