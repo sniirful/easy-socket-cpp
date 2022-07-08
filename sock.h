@@ -192,8 +192,9 @@ class server : public socket_entry {
 #endif
         return ERROR_SOCKET_OK;
     }
-    void listen_socket(std::function<void(struct sock_data data)> callback,
-                       std::function<void(int which)> onerror) {
+    void listen_socket(
+        std::function<void(struct sock_data data)> callback,
+        std::function<void(int which)> onerror = [](int w) {}) {
 #ifdef __linux__
         if (listen(server_fd, 3) < 0) {
             return onerror(ERROR_SOCKET_LISTEN);
