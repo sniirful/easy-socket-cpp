@@ -92,6 +92,7 @@ class socket_entry {
         std::string res = "";
         for (;;) {
             std::string new_char = this->read_text(data, 1);
+            if (new_char.length() <= 0) break;
             if (new_char[0] == c) {
                 if (include) res += new_char;
                 break;
@@ -106,6 +107,7 @@ class socket_entry {
         std::string res = "";
         for (;;) {
             std::string temp = this->read_until(data, last_c, true);
+            if (temp.length() <= 0) break;
             if (this->endsWith(temp, s)) {
                 int len = temp.length();
                 if (!include) len -= s.length();
